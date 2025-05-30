@@ -1,27 +1,37 @@
 package main
 
 import (
-	"github.com/altereitay/FinalProjectBackend/db"
-	"github.com/altereitay/FinalProjectBackend/helpers"
+	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/altereitay/FinalProjectBackend/db"
+	"github.com/altereitay/FinalProjectBackend/helpers"
 )
 
 func handleFile(w http.ResponseWriter, r *http.Request) {
 	helpers.HandleFile(w, r)
 }
 
+func handleFrontend() http.Handler {
+	fs := http.FileServer(http.Dir("../FinalProjectUI/dist/"))
+	return fs
+}
+
 func main() {
 	mux := http.NewServeMux()
+	port := 8080
 
 	mux.HandleFunc("POST /article/new", handleFile)
 
-	log.Println("Server running on localhost:8081")
+	mux.Handle("/", handleFrontend())
+
+	log.Println("Server running on 0.0.0.0:", port)
 
 	err := db.InitMongo()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Fatal(http.ListenAndServe("0.0.0.0:8081", mux))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", port), mux))
 }

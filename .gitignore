@@ -28,3 +28,5 @@ dist-ssr
 original
 
 *.exe
+tmp
+main

@@ -1,9 +1,11 @@
 module github.com/altereitay/FinalProjectBackend
 
-go 1.22.5
+go 1.24.1
+
+toolchain go1.24.3
 
 require (
-	github.com/ledongthuc/pdf v0.0.0-20240201131950-da5b75280b06
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	go.mongodb.org/mongo-driver v1.17.3
 )
 

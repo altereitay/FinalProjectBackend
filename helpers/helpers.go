@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/altereitay/FinalProjectBackend/db"
-	"github.com/ledongthuc/pdf"
-	"github.com/nguyenthenguyen/docx"
 	"io"
 	"log"
 	_ "mime/multipart"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/altereitay/FinalProjectBackend/db"
+	"github.com/ledongthuc/pdf"
+	"github.com/nguyenthenguyen/docx"
 )
 
 type jsonResponse struct {
@@ -86,68 +86,112 @@ func computeSHA256(content string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
+func readTxt(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	fullText := string(data)
+	return fullText, nil
+}
+
+func readPDF(path string) (string, error) {
+	f, r, err := pdf.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	var buf bytes.Buffer
+	sentences, err := r.GetStyledTexts()
+	if err != nil {
+		return "", err
+	}
+
+	for _, sentence := range sentences {
+		cleanText := strings.ReplaceAll(sentence.S, "\uFFFD", "")
+		buf.WriteString(cleanText)
+		buf.WriteString("\n")
+	}
+
+	return buf.String(), nil
+}
+
+func readDocx(path string) (string, error) {
+	r, err := docx.ReadDocxFile(path)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	// Extract the raw XML
+	content := r.Editable().GetContent()
+
+	// Extract text between <w:t>...</w:t>
+	var buf bytes.Buffer
+	tokens := strings.Split(content, "<w:t")
+	for _, token := range tokens[1:] {
+		parts := strings.SplitN(token, ">", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		end := strings.Index(parts[1], "</w:t>")
+		if end >= 0 {
+			buf.WriteString(parts[1][:end])
+			buf.WriteString("\n")
+		}
+	}
+
+	return buf.String(), nil
+}
+
 func extractTitleAndContent(path, ext string) (string, string, error) {
 	var fullText string
+	var err error
 	switch ext {
 	case ".txt":
-		data, err := os.ReadFile(path)
+		fullText, err = readTxt(path)
 		if err != nil {
-			return "", "", err
+			return "", "", nil
 		}
-		fullText = string(data)
 
 	case ".pdf":
-		f, r, err := pdf.Open(path)
+		fullText, err = readPDF(path)
 		if err != nil {
-			return "", "", err
+			return "", "", nil
 		}
-		defer f.Close()
-		var buf bytes.Buffer
-		textReader, err := r.GetPlainText()
-		if err != nil {
-			return "", "", err
-		}
-		io.Copy(&buf, textReader)
-		fullText = buf.String()
-
-	case ".doc":
-		cmd := exec.Command("soffice", "--headless", "--convert-to", "docx", path, "--outdir", os.TempDir())
-		if err := cmd.Run(); err != nil {
-			return "", "", err
-		}
-		newPath := strings.TrimSuffix(path, ".doc") + ".docx"
-		defer os.Remove(newPath)
-		fallthrough
 
 	case ".docx":
-		r, err := docx.ReadDocxFile(path)
+		fullText, err = readDocx(path)
 		if err != nil {
-			return "", "", err
+			return "", "", nil
 		}
-		defer r.Close()
-		fullText = r.Editable().GetContent()
 	}
 
 	lines := strings.Split(strings.TrimSpace(fullText), "\n")
-	if len(lines) == 0 {
+	var filteredLines []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			filteredLines = append(filteredLines, strings.TrimSpace(line))
+		}
+	}
+	if len(filteredLines) == 0 {
 		return "", "", nil
 	}
-	title := strings.TrimSpace(lines[0])
-	content := strings.TrimSpace(strings.Join(lines[1:], "\n"))
+	title := filteredLines[0]
+	content := strings.Join(filteredLines[1:], "\n")
 	return title, content, nil
 }
 
 func HandleFile(w http.ResponseWriter, r *http.Request) error {
-	fmt.Println("Handling file")
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
-		log.Println("error in parse multipart form")
+		log.Printf("error in parsing multi part form: %v", err)
 		return ErrorJSON(w, err)
 	}
 
 	file, handler, err := r.FormFile("file")
 	if err != nil {
-		log.Println("error in open file from http")
+		log.Printf("error in getting file from FormData: %v", err)
 		return ErrorJSON(w, err)
 	}
 
@@ -155,19 +199,18 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 
 	ext := filepath.Ext(handler.Filename)
 	if !isAllowedExt(ext) {
-		log.Println("error in non-allowed excitation")
 		return ErrorJSON(w, errors.New("extinction not allowed"))
 	}
 
 	tmpFile, err := os.CreateTemp("", "*"+ext)
 	if err != nil {
-		log.Println("error in create temp file")
+		log.Printf("error in create temp file: %v", err)
 		return ErrorJSON(w, err)
 	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := io.Copy(tmpFile, file); err != nil {
-		log.Println("error in copy to temp file")
+		log.Printf("error in io copy: %v", err)
 		return ErrorJSON(w, err)
 	}
 	tmpFile.Close()
@@ -175,20 +218,24 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 	// Extract title and content
 	title, content, err := extractTitleAndContent(tmpFile.Name(), ext)
 	if err != nil {
-		log.Println("error in extracting title and content")
+		log.Printf("error in extracting title and content: %v", err)
 		return ErrorJSON(w, err)
 	}
 
-	filename := strings.TrimSuffix(handler.Filename, ext) + "-original" + ext
-	savePath := filepath.Join("./original", filename)
-	dst, err := os.Create(savePath)
-	if err != nil {
-		return ErrorJSON(w, err)
-	}
-	defer dst.Close()
+	// filename := strings.TrimSuffix(handler.Filename, ext) + "-original" + ext
+	// savePath := filepath.Join("./original", filename)
+	// dst, err := os.Create(savePath)
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return ErrorJSON(w, err)
+	// }
 
-	file.Seek(0, io.SeekStart)
-	io.Copy(dst, file)
+	// log.Println("after create new file")
+
+	// defer dst.Close()
+
+	// file.Seek(0, io.SeekStart)
+	// io.Copy(dst, file)
 
 	sha := computeSHA256(content)
 
@@ -198,6 +245,10 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		Hash:     sha,
 	}
 
-	db.InsertNewArticle(mongoEntry)
+	err = db.InsertNewArticle(mongoEntry)
+	if err != nil {
+		log.Printf("error in inserting new article: %v", err)
+		return ErrorJSON(w, err)
+	}
 	return WriteJSON(w, 201, "New Article Received")
 }

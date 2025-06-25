@@ -235,5 +235,21 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		log.Printf("error in inserting new article: %v", err)
 		return ErrorJSON(w, err)
 	}
+
+	data := SimplifiedJSON{
+		Hash:   sha,
+		Name:   handler.Filename,
+		Status: "new",
+	}
+
+	dataString, err := json.Marshal(data)
+
+	if err != nil {
+		log.Printf("error in marshalling for mqtt: %v", err)
+		return ErrorJSON(w, err)
+	}
+
+	Publish("articles/simplified", string(dataString))
+
 	return WriteJSON(w, 201, "New Article Received")
 }

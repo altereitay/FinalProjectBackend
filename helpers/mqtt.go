@@ -7,11 +7,21 @@ import (
 	"time"
 
 	"github.com/altereitay/FinalProjectBackend/db"
-	"github.com/altereitay/FinalProjectBackend/helpers"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 var client mqtt.Client
+
+type SimplifiedJSON struct {
+	Hash   string `json:"hash"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type TermsJSON struct {
+	Hash  string          `json:"hash"`
+	Terms []db.SingleTerm `json:"terms"`
+}
 
 func InitMQTT() error {
 	broker := "mqtt://localhost:1883"
@@ -57,21 +67,36 @@ func Subscribe(topic string, handler mqtt.MessageHandler) error {
 }
 
 func HandleSimplifiedArticles(client mqtt.Client, msg mqtt.Message) {
-	var payload struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}
+	var payload SimplifiedJSON
 
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
 	}
 
-	simplified, err := helpers.ReadTxt(payload.Name)
+	if payload.Status != "done" {
+		return
+	}
+
+	simplified, err := ReadTxt(payload.Name)
 	if err != nil {
 		log.Printf("readTxt error: %v", err)
 	}
 
-	if err := db.AddSimplifiedVersion(payload.ID, simplified); err != nil {
+	if err := db.AddSimplifiedVersion(payload.Hash, simplified); err != nil {
+		log.Printf("db update error: %v", err)
+	}
+}
+
+func HandleTerms(client mqtt.Client, msg mqtt.Message) {
+	var payload TermsJSON
+
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
+	}
+
+	//add decode terms
+
+	if err := db.AddTerms(payload.Hash, payload.Terms); err != nil {
 		log.Printf("db update error: %v", err)
 	}
 }

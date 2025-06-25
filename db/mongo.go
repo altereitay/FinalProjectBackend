@@ -35,7 +35,7 @@ func InitMongo() error {
 	defer cancel()
 
 	mongoUri := os.Getenv("MONGO_URI")
-	
+
 	client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
 	if err != nil {
 		log.Fatal("Mongo connect error:", err)
@@ -55,42 +55,36 @@ func InsertNewArticle(doc Article) error {
 	return err
 }
 
-func AddSimplifiedVersion (id string, simple string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+func AddSimplifiedVersion(hash string, simple string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
-	}
+	filter := bson.D{{Key: "hash", Value: hash}}
 
 	update := bson.M{
-		"$set":bson.M{
+		"$set": bson.M{
 			"simplified": simple,
-		}
+		},
 	}
 
-	_, err = FileCollection.UpdateByID(ctx, objID, update)
+	_, err := FileCollection.UpdateOne(ctx, filter, update)
 	return err
 }
 
-func AddTerms (id string, terms []SingleTerm) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+func AddTerms(hash string, terms []SingleTerm) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
-	}
+	filter := bson.D{{Key: "hash", Value: hash}}
 
 	update := bson.M{
-		"$set":bson.M{
+		"$set": bson.M{
 			"terms": terms,
-		}
+		},
 	}
 
-	_, err = FileCollection.UpdateByID(ctx, objID, update)
+	_, err := FileCollection.UpdateOne(ctx, filter, update)
 	return err
 }

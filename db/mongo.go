@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -33,7 +34,9 @@ func InitMongo() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://alter1eitai:gXBioQn2NyeFZnGN@cluster0.z9676mj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"))
+	mongoUri := os.Getenv("MONGO_URI")
+	
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
 	if err != nil {
 		log.Fatal("Mongo connect error:", err)
 		return err

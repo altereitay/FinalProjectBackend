@@ -19,6 +19,17 @@ func handleFrontend() http.Handler {
 	return fs
 }
 
+func initMQTT() {
+	err := helpers.InitMQTT()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := helpers.Subscribe("articles/simplified", helpers.HandleSimplifiedArticles); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
 	mux := http.NewServeMux()
 	port := 8082

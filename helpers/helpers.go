@@ -86,7 +86,7 @@ func computeSHA256(content string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func readTxt(path string) (string, error) {
+func ReadTxt(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -149,7 +149,7 @@ func extractTitleAndContent(path, ext string) (string, string, error) {
 	var err error
 	switch ext {
 	case ".txt":
-		fullText, err = readTxt(path)
+		fullText, err = ReadTxt(path)
 		if err != nil {
 			return "", "", nil
 		}
@@ -221,21 +221,6 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		log.Printf("error in extracting title and content: %v", err)
 		return ErrorJSON(w, err)
 	}
-
-	// filename := strings.TrimSuffix(handler.Filename, ext) + "-original" + ext
-	// savePath := filepath.Join("./original", filename)
-	// dst, err := os.Create(savePath)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return ErrorJSON(w, err)
-	// }
-
-	// log.Println("after create new file")
-
-	// defer dst.Close()
-
-	// file.Seek(0, io.SeekStart)
-	// io.Copy(dst, file)
 
 	sha := computeSHA256(content)
 

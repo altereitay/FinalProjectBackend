@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -48,5 +49,45 @@ func InsertNewArticle(doc Article) error {
 	defer cancel()
 
 	_, err := FileCollection.InsertOne(ctx, doc)
+	return err
+}
+
+func AddSimplifiedVersion (id string, simple string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+
+	defer cancel()
+
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	update := bson.M{
+		"$set":bson.M{
+			"simplified": simple,
+		}
+	}
+
+	_, err = FileCollection.UpdateByID(ctx, objID, update)
+	return err
+}
+
+func AddTerms (id string, terms []SingleTerm) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+
+	defer cancel()
+
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	update := bson.M{
+		"$set":bson.M{
+			"terms": terms,
+		}
+	}
+
+	_, err = FileCollection.UpdateByID(ctx, objID, update)
 	return err
 }

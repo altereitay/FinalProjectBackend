@@ -1,10 +1,13 @@
 package helpers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/altereitay/FinalProjectBackend/db"
+	"github.com/altereitay/FinalProjectBackend/helpers"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -39,7 +42,7 @@ func Publish(topic string, payload string) error {
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("MQTT client not connected")
 	}
-	token := client.Publish(topic, 0, false, payload)
+	token := client.Publish(topic, 0, true, payload)
 	token.Wait()
 	return token.Error()
 }
@@ -51,4 +54,24 @@ func Subscribe(topic string, handler mqtt.MessageHandler) error {
 	token := client.Subscribe(topic, 0, handler)
 	token.Wait()
 	return token.Error()
+}
+
+func HandleSimplifiedArticles(client mqtt.Client, msg mqtt.Message) {
+	var payload struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
+	}
+
+	simplified, err := helpers.ReadTxt(payload.Name)
+	if err != nil {
+		log.Printf("readTxt error: %v", err)
+	}
+
+	if err := db.AddSimplifiedVersion(payload.ID, simplified); err != nil {
+		log.Printf("db update error: %v", err)
+	}
 }

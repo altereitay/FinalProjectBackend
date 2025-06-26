@@ -38,6 +38,8 @@ func main() {
 	mux := http.NewServeMux()
 	port := 8082
 
+	initMQTT()
+
 	mux.HandleFunc("POST /article/new", handleFile)
 
 	mux.Handle("/", handleFrontend())

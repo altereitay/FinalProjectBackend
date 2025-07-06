@@ -224,6 +224,30 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 
 	sha := computeSHA256(content)
 
+	articleExists := db.CheckIfExists(sha)
+	if articleExists {
+		log.Println("Article already exists")
+		payload := jsonResponse{
+			Error:   false,
+			Message: "Article already exists",
+		}
+		return WriteJSON(w, 400, payload)
+	}
+
+	fileName := "/home/sceuser/articles/" + sha + "-original.txt"
+	fileData := title + "\n" + content
+	fileCopy, err := os.Create(fileName)
+	if err != nil {
+		log.Printf("error in creating file: %v", err)
+		return ErrorJSON(w, err)
+	}
+	defer fileCopy.Close()
+	_, err = fileCopy.WriteString(fileData)
+	if err != nil {
+		log.Printf("error in wtrie to file: %v", err)
+		return ErrorJSON(w, err)
+	}
+
 	mongoEntry := db.Article{
 		Title:    title,
 		Original: content,
@@ -238,7 +262,7 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 
 	data := SimplifiedJSON{
 		Hash:   sha,
-		Name:   handler.Filename,
+		Name:   fileName,
 		Status: "new",
 	}
 
@@ -249,7 +273,12 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		return ErrorJSON(w, err)
 	}
 
-	Publish("articles/simplified", string(dataString))
+	Publish(SIMPLIFY_TOPIC, dataString)
 
-	return WriteJSON(w, 201, "New Article Received")
+	payload := jsonResponse{
+		Error:   false,
+		Message: "New Article Received",
+	}
+
+	return WriteJSON(w, 201, payload)
 }

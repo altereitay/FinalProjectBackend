@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -25,8 +26,8 @@ type Article struct {
 }
 
 type SingleTerm struct {
-	Term       string `bson:"term"`
-	Definition string `bson:"definition"`
+	Term       string `json:"term" bson:"term"`
+	Definition string `json:"definition" bson:"definition"`
 }
 
 func InitMongo() error {
@@ -87,4 +88,20 @@ func AddTerms(hash string, terms []SingleTerm) error {
 
 	_, err := FileCollection.UpdateOne(ctx, filter, update)
 	return err
+}
+
+func CheckIfExists(hash string) bool {
+	var art Article
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	filter := bson.D{{Key: "hash", Value: hash}}
+
+	err := FileCollection.FindOne(ctx, filter).Decode(&art)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false
+	} else {
+		return true
+	}
 }

@@ -25,11 +25,11 @@ func initMQTT() {
 		log.Fatal(err)
 	}
 
-	if err := helpers.Subscribe("articles/simplified", helpers.HandleSimplifiedArticles); err != nil {
+	if err := helpers.Subscribe(helpers.SIMPLIFY_TOPIC, helpers.HandleSimplifiedArticles); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := helpers.Subscribe("articles/terms", helpers.HandleTerms); err != nil {
+	if err := helpers.Subscribe(helpers.TERMS_TOPIC, helpers.HandleTerms); err != nil {
 		log.Fatal(err)
 	}
 }

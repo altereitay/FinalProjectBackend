@@ -86,7 +86,7 @@ func computeSHA256(content string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func readTxt(path string) (string, error) {
+func ReadTxt(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -149,7 +149,7 @@ func extractTitleAndContent(path, ext string) (string, string, error) {
 	var err error
 	switch ext {
 	case ".txt":
-		fullText, err = readTxt(path)
+		fullText, err = ReadTxt(path)
 		if err != nil {
 			return "", "", nil
 		}
@@ -222,22 +222,31 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		return ErrorJSON(w, err)
 	}
 
-	// filename := strings.TrimSuffix(handler.Filename, ext) + "-original" + ext
-	// savePath := filepath.Join("./original", filename)
-	// dst, err := os.Create(savePath)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return ErrorJSON(w, err)
-	// }
-
-	// log.Println("after create new file")
-
-	// defer dst.Close()
-
-	// file.Seek(0, io.SeekStart)
-	// io.Copy(dst, file)
-
 	sha := computeSHA256(content)
+
+	articleExists := db.CheckIfExists(sha)
+	if articleExists {
+		log.Println("Article already exists")
+		payload := jsonResponse{
+			Error:   false,
+			Message: "Article already exists",
+		}
+		return WriteJSON(w, 400, payload)
+	}
+
+	fileName := "/home/sceuser/articles/" + sha + "-original.txt"
+	fileData := title + "\n" + content
+	fileCopy, err := os.Create(fileName)
+	if err != nil {
+		log.Printf("error in creating file: %v", err)
+		return ErrorJSON(w, err)
+	}
+	defer fileCopy.Close()
+	_, err = fileCopy.WriteString(fileData)
+	if err != nil {
+		log.Printf("error in wtrie to file: %v", err)
+		return ErrorJSON(w, err)
+	}
 
 	mongoEntry := db.Article{
 		Title:    title,
@@ -250,5 +259,36 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 		log.Printf("error in inserting new article: %v", err)
 		return ErrorJSON(w, err)
 	}
-	return WriteJSON(w, 201, "New Article Received")
+
+	data := SimplifiedJSON{
+		Hash:   sha,
+		Name:   fileName,
+		Status: "new",
+	}
+
+	dataString, err := json.Marshal(data)
+
+	if err != nil {
+		log.Printf("error in marshalling for mqtt: %v", err)
+		return ErrorJSON(w, err)
+	}
+
+	Publish(SIMPLIFY_TOPIC, dataString)
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "New Article Received",
+	}
+
+	return WriteJSON(w, 201, payload)
+}
+
+func HandleArticles(w http.ResponseWriter, r *http.Request) error {
+	articles, err := db.GetArticles()
+
+	if err != nil {
+		return ErrorJSON(w, err)
+	}
+
+	return WriteJSON(w, 200, articles)
 }

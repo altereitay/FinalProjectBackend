@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/altereitay/FinalProjectBackend/db"
 	"github.com/altereitay/FinalProjectBackend/helpers"
@@ -15,8 +17,21 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFrontend() http.Handler {
-	fs := http.FileServer(http.Dir("../FinalProjectUI/dist/"))
-	return fs
+	distDir := "../FinalProjectUI/dist"
+	fs := http.FileServer(http.Dir(distDir))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the file
+		f, err := os.Open(filepath.Join(distDir, r.URL.Path))
+		if err == nil {
+			f.Close()
+			fs.ServeHTTP(w, r)
+			return
+		}
+
+		// If file doesn't exist, serve index.html
+		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+	})
 }
 
 func handleArticles(w http.ResponseWriter, r *http.Request) {

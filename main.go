@@ -19,6 +19,11 @@ func handleFrontend() http.Handler {
 	return fs
 }
 
+func handleArticles(w http.ResponseWriter, r *http.Request) {
+	log.Println("Retriving all articles")
+	helpers.HandleArticles(w, r)
+}
+
 func initMQTT() {
 	err := helpers.InitMQTT()
 	if err != nil {
@@ -34,6 +39,26 @@ func initMQTT() {
 	}
 }
 
+func enableCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		// Handle preflight
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	mux := http.NewServeMux()
 	port := 8082
@@ -44,6 +69,8 @@ func main() {
 
 	mux.Handle("/", handleFrontend())
 
+	mux.HandleFunc("GET /articles", handleArticles)
+
 	log.Println("Server running on 0.0.0.0:", port)
 
 	err := db.InitMongo()
@@ -51,5 +78,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", port), mux))
+	wrapped := enableCORS(mux)
+
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", port), wrapped))
 }

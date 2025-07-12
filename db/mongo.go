@@ -17,12 +17,12 @@ var client *mongo.Client
 var FileCollection *mongo.Collection
 
 type Article struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty"`
-	Title      string             `bson:"title"`
-	Original   string             `bson:"original"`
-	Simplified string             `bson:"simplified,omitempty"`
-	Terms      []SingleTerm       `bson:"terms,omitempty"`
-	Hash       string             `bson:"hash"`
+	ID         primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Title      string             `json:"title" bson:"title"`
+	Original   string             `json:"original" bson:"original"`
+	Simplified string             `json:"simplified" bson:"simplified,omitempty"`
+	Terms      []SingleTerm       `json:"terms" bson:"terms,omitempty"`
+	Hash       string             `json:"hash" bson:"hash"`
 }
 
 type SingleTerm struct {
@@ -48,6 +48,7 @@ func InitMongo() error {
 }
 
 func InsertNewArticle(doc Article) error {
+	log.Println("inserting a new Article")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
@@ -104,4 +105,23 @@ func CheckIfExists(hash string) bool {
 	} else {
 		return true
 	}
+}
+
+func GetArticles() ([]Article, error) {
+	log.Println("fetching all Articles")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := FileCollection.Find(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var articles []Article
+	if err := cursor.All(ctx, &articles); err != nil {
+		return nil, err
+	}
+
+	return articles, nil
 }

@@ -282,3 +282,13 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 
 	return WriteJSON(w, 201, payload)
 }
+
+func HandleArticles(w http.ResponseWriter, r *http.Request) error {
+	articles, err := db.GetArticles()
+
+	if err != nil {
+		return ErrorJSON(w, err)
+	}
+
+	return WriteJSON(w, 200, articles)
+}

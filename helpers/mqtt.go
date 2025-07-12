@@ -35,6 +35,7 @@ func InitMQTT() error {
 	opts.SetClientID(clientID)
 	opts.SetKeepAlive(2 * time.Second)
 	opts.SetPingTimeout(1 * time.Second)
+	opts.SetCleanSession(false)
 
 	opts.OnConnect = func(c mqtt.Client) {
 		log.Printf("Connected to mqtt broker: %s", broker)
@@ -56,7 +57,7 @@ func Publish(topic string, payload []byte) error {
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("MQTT client not connected")
 	}
-	token := client.Publish(topic, 2, true, payload)
+	token := client.Publish(topic, 2, false, payload)
 	token.Wait()
 	return token.Error()
 }
@@ -70,23 +71,28 @@ func Subscribe(topic string, handler mqtt.MessageHandler) error {
 	return token.Error()
 }
 
-func ClearQueue(topic string) error {
-	return Publish(topic, nil)
-}
-
 func HandleSimplifiedArticles(client mqtt.Client, msg mqtt.Message) {
+	var statusOnly struct {
+		Status string `json:"status"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &statusOnly); err != nil {
+		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
+		return
+	}
+
+	if statusOnly.Status != "done" {
+		return
+	}
+
 	var payload SimplifiedJSON
 
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
-	}
-
-	if payload.Status != "done" {
 		return
 	}
 
-	if err := ClearQueue(SIMPLIFY_TOPIC); err != nil {
-		log.Printf("ClearQueue error: %v", err)
+	if payload.Status != "done" {
 		return
 	}
 
@@ -103,18 +109,23 @@ func HandleSimplifiedArticles(client mqtt.Client, msg mqtt.Message) {
 }
 
 func HandleTerms(client mqtt.Client, msg mqtt.Message) {
+	var statusOnly struct {
+		Status string `json:"status"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &statusOnly); err != nil {
+		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
+		return
+	}
+
+	if statusOnly.Status != "done" {
+		return
+	}
+
 	var payload TermsJSON
 
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		log.Printf("bad JSON on %q: %v", msg.Topic(), err)
-	}
-
-	if payload.Status != "done" {
-		return
-	}
-
-	if err := ClearQueue(TERMS_TOPIC); err != nil {
-		log.Printf("ClearQueue error: %v", err)
 		return
 	}
 

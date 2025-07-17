@@ -144,9 +144,10 @@ func readDocx(path string) (string, error) {
 	return buf.String(), nil
 }
 
-func extractTitleAndContent(path, ext string) (string, string, error) {
+func extractContentAndTitle(path, ext string) (string, string, error) {
 	var fullText string
 	var err error
+	var title string
 	switch ext {
 	case ".txt":
 		fullText, err = ReadTxt(path)
@@ -155,9 +156,11 @@ func extractTitleAndContent(path, ext string) (string, string, error) {
 		}
 
 	case ".pdf":
-		fullText, err = readPDF(path)
+		title, fullText, err = ExtractTitleAndBody(path)
 		if err != nil {
 			return "", "", nil
+		} else {
+			return fullText, title, nil
 		}
 
 	case ".docx":
@@ -177,9 +180,9 @@ func extractTitleAndContent(path, ext string) (string, string, error) {
 	if len(filteredLines) == 0 {
 		return "", "", nil
 	}
-	title := filteredLines[0]
-	content := strings.Join(filteredLines[1:], "\n")
-	return title, content, nil
+	title = lines[0]
+	content := strings.Join(filteredLines[:1], "\n")
+	return content, title, nil
 }
 
 func HandleFile(w http.ResponseWriter, r *http.Request) error {
@@ -216,13 +219,13 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 	tmpFile.Close()
 
 	// Extract title and content
-	title, content, err := extractTitleAndContent(tmpFile.Name(), ext)
+	article, title, err := extractContentAndTitle(tmpFile.Name(), ext)
 	if err != nil {
 		log.Printf("error in extracting title and content: %v", err)
 		return ErrorJSON(w, err)
 	}
 
-	sha := computeSHA256(content)
+	sha := computeSHA256(article)
 
 	articleExists := db.CheckIfExists(sha)
 	if articleExists {
@@ -235,7 +238,7 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	fileName := "/home/sceuser/articles/" + sha + "-original.txt"
-	fileData := title + "\n" + content
+	fileData := title + "\n" + article
 	fileCopy, err := os.Create(fileName)
 	if err != nil {
 		log.Printf("error in creating file: %v", err)
@@ -250,7 +253,7 @@ func HandleFile(w http.ResponseWriter, r *http.Request) error {
 
 	mongoEntry := db.Article{
 		Title:    title,
-		Original: content,
+		Original: article,
 		Hash:     sha,
 	}
 
